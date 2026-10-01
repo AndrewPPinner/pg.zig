@@ -17,6 +17,7 @@ pub const Stream = if (lib.has_openssl) TLSStream else PlainStream;
 const TLSStream = struct {
     valid: bool,
     ssl: ?*openssl.SSL,
+    stream_bio: ?*StreamBio,
     stream: Io.net.Stream,
     io: Io,
 
@@ -27,6 +28,7 @@ const TLSStream = struct {
         const stream = plain.stream;
 
         var ssl: ?*openssl.SSL = null;
+        var stream_bio: ?*StreamBio = null;
         if (ctx_) |ctx| {
             // PostgreSQL TLS starts off as a plain connection which we upgrade
             try writeStream(stream, io, &.{ 0, 0, 0, 8, 4, 210, 22, 47 });
@@ -62,13 +64,17 @@ const TLSStream = struct {
                 }
             }
 
-            if (openssl.SSL_set_fd(ssl, if (@import("builtin").os.tag == .windows) @intCast(@intFromPtr(stream.socket.handle)) else stream.socket.handle) != 1) {
-                return error.SSLSetFdFailed;
-            }
+            stream_bio = try StreamBio.init(stream, io, allocator);
+            errdefer stream_bio.?.deinit();
+
+            openssl.SSL_set_bio(ssl, stream_bio.?.bio, stream_bio.?.bio);
 
             {
                 const ret = openssl.SSL_connect(ssl);
                 if (ret != 1) {
+                    const err = openssl.SSL_get_error(ssl, ret);
+                    const err2 = windows.std_windows.GetLastError();
+                    std.log.debug("{} {}", .{ err, err2 });
                     const verification_code = openssl.SSL_get_verify_result(ssl);
                     if (comptime lib._stderr_tls) {
                         lib.printSSLError();
@@ -89,6 +95,7 @@ const TLSStream = struct {
             .valid = true,
             .stream = stream,
             .io = io,
+            .stream_bio = stream_bio,
         };
     }
 
@@ -99,6 +106,8 @@ const TLSStream = struct {
                 self.valid = false;
             }
             openssl.SSL_free(ssl);
+
+            if (self.stream_bio) |sb| sb.deinit();
         }
         self.stream.close(self.io);
     }
@@ -180,6 +189,106 @@ const PlainStream = struct {
 
     pub fn read(self: *const PlainStream, buf: []u8) !usize {
         return readStream(self.stream, self.io, buf);
+    }
+};
+
+const StreamBio = struct {
+    allocator: Allocator,
+    bio: *openssl.BIO,
+    method: *openssl.BIO_METHOD,
+    stream: Io.net.Stream,
+    io: Io,
+
+    fn read(bio: ?*openssl.BIO, buffer: [*c]u8, len: usize, read_count: [*c]usize) callconv(.c) c_int {
+        const ctx: *StreamBio = @ptrCast(
+            @alignCast(openssl.BIO_get_data(bio)),
+        );
+
+        const dst = buffer[0..len];
+
+        const n = readStream(ctx.stream, ctx.io, dst) catch {
+            read_count.* = 0;
+            return 0;
+        };
+
+        read_count.* = n;
+        return 1;
+    }
+
+    fn write(bio: ?*openssl.BIO, buffer: [*c]const u8, len: usize, written: [*c]usize) callconv(.c) c_int {
+        const ctx: *StreamBio = @ptrCast(
+            @alignCast(openssl.BIO_get_data(bio)),
+        );
+
+        const src = buffer[0..len];
+
+        writeStream(ctx.stream, ctx.io, src) catch {
+            written.* = 0;
+            return 0;
+        };
+
+        written.* = len;
+        return 1;
+    }
+
+    fn ctrl(bio: ?*openssl.BIO, cmd: c_int, num: c_long, ptr: ?*anyopaque) callconv(.c) c_long {
+        _ = bio;
+        _ = num;
+        _ = ptr;
+
+        return switch (cmd) {
+            openssl.BIO_CTRL_FLUSH => 1,
+            else => 0,
+        };
+    }
+
+    fn configure_bio_method() !*openssl.BIO_METHOD {
+        const new_bio_method = openssl.BIO_meth_new(openssl.BIO_TYPE_SOURCE_SINK, "zig io.net stream") orelse {
+            return error.BioMethodCreateFailed;
+        };
+
+        if (openssl.BIO_meth_set_read_ex(new_bio_method, StreamBio.read) != 1) {
+            return error.BioMethodReadFailed;
+        }
+
+        if (openssl.BIO_meth_set_write_ex(new_bio_method, StreamBio.write) != 1) {
+            return error.BioMethodWriteFailed;
+        }
+
+        if (openssl.BIO_meth_set_ctrl(new_bio_method, StreamBio.ctrl) != 1) {
+            return error.BioMethodCtrlFailed;
+        }
+
+        return new_bio_method;
+    }
+
+    fn create_bio(method: *openssl.BIO_METHOD) !*openssl.BIO {
+        const bio = openssl.BIO_new(method) orelse
+            return error.BioCreateFailed;
+
+        return bio;
+    }
+
+    pub fn init(stream: Io.net.Stream, io: Io, alloc: Allocator) !*StreamBio {
+        const method = try configure_bio_method();
+        errdefer openssl.BIO_meth_free(method);
+
+        const bio = try create_bio(method);
+        errdefer _ = openssl.BIO_free(bio);
+
+        const self = try alloc.create(StreamBio);
+        errdefer alloc.destroy(self);
+        self.* = .{ .stream = stream, .io = io, .bio = bio, .allocator = alloc, .method = method };
+        openssl.BIO_set_data(self.bio, @ptrCast(self));
+        openssl.BIO_set_init(self.bio, 1);
+
+        return self;
+    }
+
+    pub fn deinit(self: *StreamBio) void {
+        _ = openssl.BIO_free(self.bio);
+        openssl.BIO_meth_free(self.method);
+        self.allocator.destroy(self);
     }
 };
 
