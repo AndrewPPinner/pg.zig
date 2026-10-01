@@ -285,8 +285,8 @@ const StreamBio = struct {
         return self;
     }
 
+    // Does not free bio since BIOs assigned to SSL via SSL_set_bio are automatically freed when SSL_free is called
     pub fn deinit(self: *StreamBio) void {
-        _ = openssl.BIO_free(self.bio);
         openssl.BIO_meth_free(self.method);
         self.allocator.destroy(self);
     }
