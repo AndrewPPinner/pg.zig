@@ -1,3 +1,10 @@
+# Fork Notice
+
+This is a fork to get open ssl unstuck with as little changes as possible to the original code base. Confirmed working with 0.16 and OpenSSL. Happy to take collaboration and feedback on the implementation. 
+
+Assuming this fork doesn't have substantial drift, usage, or new features, once https://github.com/karlseguin/pg.zig is update to support OpenSSL properly, this repo will marked as archived.
+
+
 # Native PostgreSQL driver for Zig
 
 A native PostgresSQL driver / client for Zig. Supports [LISTEN](#listen--notify).
@@ -5,13 +12,13 @@ A native PostgresSQL driver / client for Zig. Supports [LISTEN](#listen--notify)
 See or run [example/main.zig](https://github.com/karlseguin/pg.zig/blob/master/example/main.zig) for a number of examples.
 
 ## Zig Version
-This is for Zig 0.16.0. Use the [zig-0.15.2](https://github.com/karlseguin/pg.zig/tree/zig-0.15) branch for Zig 0.15 or the [dev](https://github.com/karlseguin/pg.zig/tree/dev) which may or may not be up to date with zig dev.
+This is for Zig 0.16.0.
 
 ## Install
 1) Add pg.zig as a dependency in your `build.zig.zon`:
 
 ```bash
-zig fetch --save git+https://github.com/karlseguin/pg.zig#master
+zig fetch --save git+https://github.com/AndrewPPinner/pg.zig#dev
 ```
 
 2) In your `build.zig`, add the `pg` module as a dependency to your program:
