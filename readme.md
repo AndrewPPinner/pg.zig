@@ -1,3 +1,11 @@
+# USE DEV BRANCH< ONLY BRANCH I AM MAINTAINING
+
+# Fork Notice
+
+This is a fork to get open ssl unstuck with as little changes as possible to the original code base. Confirmed working with 0.16 and OpenSSL. Happy to take collaboration and feedback on the implementation. 
+
+Assuming this fork doesn't have substantial drift, usage, or new features, once https://github.com/karlseguin/pg.zig is update to support OpenSSL properly, this repo will marked as archived.
+
 # Native PostgreSQL driver for Zig
 
 A native PostgresSQL driver / client for Zig. Supports [LISTEN](#listen--notify).
