@@ -1,4 +1,4 @@
-# Fork Info
+# Fork Notice
 
 This is a fork to get open ssl unstuck with as little changes as possible to the original code base. Confirmed working with 0.16 and OpenSSL. Happy to take collaboration and feedback on the implementation. 
 
