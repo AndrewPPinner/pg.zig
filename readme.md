@@ -4,7 +4,30 @@ This is a fork to get open ssl unstuck with as little changes as possible to the
 
 Assuming this fork doesn't have substantial drift, usage, or new features, once https://github.com/karlseguin/pg.zig is update to support OpenSSL properly, this repo will marked as archived.
 
+# Using SSL (details specific for this fork)
+Quick guide on getting OpenSSL working on Windows (I know, gross)
+- Download OpenSSL Development kit (I have had good luck with [Shining Light Productions](https://slproweb.com/products/Win32OpenSSL.html), I am using `Win64 OpenSSL v3.6.5`)
+- Select all the default settings (except donating but feel free to do so!)
+  - Ensure to select "Copy OpenSSL DLLs to: `The Windows system directory`" (I had issues the other way but feel free to explore)
+- Files to rename
+  - `install-path/OpenSSL-Win64/lib/VC/x64/MD/libcrypto.lib` -> `install-path/OpenSSL-Win64/lib/VC/x64/MD/crypto.lib`
+  - `install-path/OpenSSL-Win64/lib/VC/x64/MD/libssl.lib` -> `install-path/OpenSSL-Win64/lib/VC/x64/MD/ssl.lib`
+- Add the following to your `build.zig` (following the below information on linking the module and adding the import to your project namespace)
 
+``` zig
+    const pg_dep = b.dependency("pg", .{
+        .target = target,
+        .optimize = optimize,
+        .openssl_lib_name = "ssl",
+        .openssl_lib_path = std.Build.LazyPath{
+            .cwd_relative = "C:\\Program Files\\OpenSSL-Win64\\lib\\VC\\x64\\MD",
+        },
+        .openssl_include_path = std.Build.LazyPath{
+            .cwd_relative = "C:\\Program Files\\OpenSSL-Win64\\include",
+        },
+    });
+```
+    
 # Native PostgreSQL driver for Zig
 
 A native PostgresSQL driver / client for Zig. Supports [LISTEN](#listen--notify).
