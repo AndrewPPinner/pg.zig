@@ -4,6 +4,7 @@ const lib = @import("lib.zig");
 pub const Row = lib.Row;
 pub const Conn = lib.Conn;
 pub const Pool = lib.Pool;
+pub const MockPool = lib.MockPool;
 pub const Stmt = lib.Stmt;
 pub const Result = lib.Result;
 pub const Iterator = lib.Iterator;
